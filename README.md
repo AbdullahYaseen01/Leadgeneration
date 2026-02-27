@@ -34,9 +34,9 @@ Collect business leads by **city** and **niche** using the Google Places API. Ou
    - Click Deploy. Vercel will run `pip install -r requirements.txt` and deploy the Flask app.
 
 5. **Limits on Vercel**
-   - You can request up to **1000 leads**. The function runs up to **~13 minutes** (800s on Pro/Enterprise; `maxDuration` in `vercel.json`) for best results, then returns all leads collected in that time. On Hobby the max is 300s (~5 min). Set **Function max duration** to 800 in Vercel: Project → Settings → Functions (Pro plan).
-6. **25-minute runs (self-hosted only)**  
-   - Vercel cannot run longer than 800s. For **~25-minute runs** (best results), self-host the app (e.g. Railway, Render) and set **`MAX_RUN_SECONDS=1500`** in the environment; the job will run up to 25 min and return all leads collected. Or run the CLI locally with no time limit.
+   - You can request up to **1000 leads**. On the **free/Hobby plan**, `maxDuration` is limited to **300 seconds (~5 minutes)**. The app runs up to ~5 min and returns all leads collected in that time. To use longer runs (up to 13 min), upgrade to Pro and set `maxDuration` to 300–800 in Project → Settings → Functions.
+6. **Longer runs (self-hosted or Pro)**  
+   - For **~25-minute runs**, self-host the app (e.g. Railway, Render) and set **`MAX_RUN_SECONDS=1500`** in the environment, or run the CLI locally with no time limit.
 
 ---
 

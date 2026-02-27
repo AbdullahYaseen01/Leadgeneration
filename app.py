@@ -29,8 +29,8 @@ jobs: dict = {}
 MAX_LEADS_WEB = 1000
 # On Vercel: allow up to 1000 leads; we stop when max_time_seconds is reached (see vercel.json maxDuration)
 MAX_LEADS_VERCEL = 1000
-# Vercel Pro/Enterprise max is 800s (~13.3 min). Hobby is 300s. We use 790s for best results on Pro.
-VERCEL_MAX_TIME_SECONDS = 790
+# Vercel free/Hobby: max 300s (~5 min). We use 290s to finish before timeout.
+VERCEL_MAX_TIME_SECONDS = 290
 VERCEL = os.environ.get("VERCEL") == "1"
 
 
@@ -300,7 +300,7 @@ INDEX_HTML = """
     <p class="hint">Hold Ctrl (Windows) or Cmd (Mac) to select multiple niches.</p>
     <label for="max_leads">How many leads?</label>
     <input type="number" id="max_leads" name="max_leads" min="1" max="{{ max_leads_web }}" value="10" required>
-    <small style="color:#71717a; font-size:0.8rem;">Max {{ max_leads_web }} per run.{% if is_vercel %} (Vercel: runs up to ~13 min for best results; you get all leads collected in that time.){% endif %}</small>
+    <small style="color:#71717a; font-size:0.8rem;">Max {{ max_leads_web }} per run.{% if is_vercel %} (Vercel: runs up to ~5 min; you get all leads collected in that time.){% endif %}</small>
     <button type="submit" id="btn">Get leads</button>
   </form>
   <div id="message" role="status"></div>
