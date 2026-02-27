@@ -1,0 +1,5 @@
+# Web frontend
+flask>=3.0
+
+# scrape_businesses.py uses only standard library (urllib, csv, json, re).
+# Python 3.9+ recommended.

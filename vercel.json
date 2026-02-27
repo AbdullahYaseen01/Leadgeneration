@@ -1,0 +1,9 @@
+{
+  "framework": "flask",
+  "installCommand": "pip install -r requirements.txt",
+  "functions": {
+    "app.py": {
+      "maxDuration": 800
+    }
+  }
+}

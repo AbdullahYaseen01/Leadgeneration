@@ -1,0 +1,4 @@
+config.json
+outputs/
+__pycache__/
+*.pyc

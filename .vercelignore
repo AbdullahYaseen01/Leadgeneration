@@ -1,0 +1,8 @@
+# Do not upload secrets or local outputs
+config.json
+outputs/
+__pycache__/
+*.pyc
+.env
+.env.*
+.git/
