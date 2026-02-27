@@ -32,6 +32,7 @@ Collect business leads by **city** and **niche** using the Google Places API. Ou
 
 4. **Deploy**
    - Click Deploy. Vercel will run `pip install -r requirements.txt` and deploy the Flask app.
+   - After the first deploy: in **Project → Settings → Functions**, set **Max Duration** to **300** seconds so the lead-collect job can run up to 5 minutes.
 
 5. **Limits on Vercel**
    - You can request up to **1000 leads**. On the **free/Hobby plan**, `maxDuration` is limited to **300 seconds (~5 minutes)**. The app runs up to ~5 min and returns all leads collected in that time. To use longer runs (up to 13 min), upgrade to Pro and set `maxDuration` to 300–800 in Project → Settings → Functions.
