@@ -308,7 +308,7 @@ INDEX_HTML = """
     const form = document.getElementById('form');
     const btn = document.getElementById('btn');
     const msg = document.getElementById('message');
-    const maxLeads = {{ max_leads_web }};
+    const maxLeads = {{ max_leads_web | default(1000) | int }};
 
     // Pre-fill form from URL params (?city=Mannheim&niche=Moving+companies&max_leads=10)
     (function () {
@@ -339,7 +339,7 @@ INDEX_HTML = """
 
     function setLoading(loading) {
       btn.disabled = loading;
-      btn.textContent = loading ? 'Collecting leads…' : 'Get leads';
+      btn.textContent = loading ? 'Collecting leads...' : 'Get leads';
     }
 
     form.addEventListener('submit', async (e) => {
@@ -358,7 +358,7 @@ INDEX_HTML = """
         return;
       }
       setLoading(true);
-      showMessage('Starting…', 'info');
+      showMessage('Starting...', 'info');
       try {
         const res = await fetch('/api/collect', {
           method: 'POST',
@@ -379,7 +379,7 @@ INDEX_HTML = """
           URL.revokeObjectURL(a.href);
           const count = Math.max(0, text.trim().split('\n').length - 1);
           if (count === 0) {
-            showMessage('0 leads found. Check: API key is set in Vercel (GOOGLE_PLACES_API_KEY), Places API is enabled for your key, and try different city/niche. Only businesses with website + email are included.', 'error');
+            showMessage("0 leads found. Check: API key is set in Vercel (GOOGLE_PLACES_API_KEY), Places API is enabled for your key, and try different city/niche. Only businesses with website + email are included.", "error");
           } else {
             showMessage('Done! ' + count + ' leads. CSV downloaded.', 'success');
           }
@@ -393,7 +393,7 @@ INDEX_HTML = """
           return;
         }
         const jobId = data.job_id;
-        showMessage('Collecting leads… This may take a few minutes.', 'info');
+        showMessage('Collecting leads... This may take a few minutes.', 'info');
         const check = async () => {
           const s = await fetch('/api/status/' + jobId).then(r => r.json());
           if (s.status === 'done') {
