@@ -282,7 +282,7 @@ INDEX_HTML = """
 </head>
 <body>
   <h1>Lead Dataset Builder</h1>
-  <form id="form">
+  <form id="form" data-max-leads="{{ max_leads_web | default(1000) | int }}">
     <label for="city">Cities</label>
     <select id="city" name="city" multiple size="8">
       {% for c in cities %}
@@ -305,62 +305,58 @@ INDEX_HTML = """
   <div id="message" role="status"></div>
 
   <script>
-    const form = document.getElementById('form');
-    const btn = document.getElementById('btn');
-    const msg = document.getElementById('message');
-    const maxLeads = {{ max_leads_web | default(1000) | int }};
-
-    // Pre-fill form from URL params (?city=Mannheim&niche=Moving+companies&max_leads=10)
     (function () {
-      const params = new URLSearchParams(window.location.search);
-      const urlCities = params.getAll('city').map(c => decodeURIComponent(c));
-      const urlNiches = params.getAll('niche').map(n => decodeURIComponent(n));
-      const urlMax = params.get('max_leads');
-      const cityEl = document.getElementById('city');
-      const nicheEl = document.getElementById('niche');
-      const maxEl = document.getElementById('max_leads');
-      if (urlCities.length) {
-        Array.from(cityEl.options).forEach(opt => { opt.selected = urlCities.includes(opt.value); });
-      }
-      if (urlNiches.length) {
-        Array.from(nicheEl.options).forEach(opt => { opt.selected = urlNiches.includes(opt.value); });
-      }
-      if (urlMax) {
-        const n = parseInt(urlMax, 10);
-        if (n >= 1 && n <= maxLeads) maxEl.value = n;
-      }
-    })();
+      var form = document.getElementById('form');
+      var btn = document.getElementById('btn');
+      var msg = document.getElementById('message');
+      var maxLeads = parseInt(form.getAttribute('data-max-leads'), 10) || 1000;
 
-    function showMessage(text, type) {
-      msg.textContent = text;
-      msg.className = type || 'info';
-      msg.style.display = 'block';
-    }
-
-    function setLoading(loading) {
-      btn.disabled = loading;
-      btn.textContent = loading ? 'Collecting leads...' : 'Get leads';
-    }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const cityEl = document.getElementById('city');
-      const nicheEl = document.getElementById('niche');
-      const selectedCities = Array.from(cityEl.selectedOptions).map(o => o.value);
-      const selectedNiches = Array.from(nicheEl.selectedOptions).map(o => o.value);
-      const maxLeadsVal = parseInt(document.getElementById('max_leads').value, 10) || 10;
-      if (selectedCities.length === 0 || selectedNiches.length === 0) {
-        showMessage('Select at least one city and one niche.', 'error');
-        return;
+      var params = new URLSearchParams(window.location.search);
+      var urlCities = params.getAll('city').map(function (c) { try { return decodeURIComponent(c); } catch (e) { return c; } });
+      var urlNiches = params.getAll('niche').map(function (n) { try { return decodeURIComponent(n); } catch (e) { return n; } });
+      var urlMax = parseInt(params.get('max_leads'), 10);
+      var cityEl = document.getElementById('city');
+      var nicheEl = document.getElementById('niche');
+      var maxEl = document.getElementById('max_leads');
+      if (urlCities.length > 0 && cityEl) {
+        Array.from(cityEl.options).forEach(function (opt) { opt.selected = urlCities.indexOf(opt.value) !== -1; });
       }
-      if (maxLeadsVal < 1 || maxLeadsVal > maxLeads) {
-        showMessage('Please enter between 1 and ' + maxLeads + ' leads.', 'error');
-        return;
+      if (urlNiches.length > 0 && nicheEl) {
+        Array.from(nicheEl.options).forEach(function (opt) { opt.selected = urlNiches.indexOf(opt.value) !== -1; });
       }
-      setLoading(true);
-      showMessage('Starting...', 'info');
-      try {
-        const res = await fetch('/api/collect', {
+      if (!isNaN(urlMax) && urlMax >= 1 && urlMax <= maxLeads && maxEl) {
+        maxEl.value = urlMax;
+      }
+
+      function showMessage(text, type) {
+        msg.textContent = text;
+        msg.className = type || 'info';
+        msg.style.display = 'block';
+      }
+
+      function setLoading(loading) {
+        btn.disabled = loading;
+        btn.textContent = loading ? 'Collecting leads...' : 'Get leads';
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var cityEl = document.getElementById('city');
+        var nicheEl = document.getElementById('niche');
+        var selectedCities = Array.from(cityEl.selectedOptions).map(function (o) { return o.value; });
+        var selectedNiches = Array.from(nicheEl.selectedOptions).map(function (o) { return o.value; });
+        var maxLeadsVal = parseInt(document.getElementById('max_leads').value, 10) || 10;
+        if (selectedCities.length === 0 || selectedNiches.length === 0) {
+          showMessage('Select at least one city and one niche.', 'error');
+          return;
+        }
+        if (maxLeadsVal < 1 || maxLeadsVal > maxLeads) {
+          showMessage('Please enter between 1 and ' + String(maxLeads) + ' leads.', 'error');
+          return;
+        }
+        setLoading(true);
+        showMessage('Starting...', 'info');
+        fetch('/api/collect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -368,54 +364,57 @@ INDEX_HTML = """
             niche: selectedNiches,
             max_leads: maxLeadsVal
           })
+        }).then(function (res) {
+          var contentType = res.headers.get('content-type') || '';
+          if (contentType.indexOf('text/csv') !== -1) {
+            return res.text().then(function (text) {
+              var a = document.createElement('a');
+              a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+              a.download = 'leads.csv';
+              a.click();
+              URL.revokeObjectURL(a.href);
+              var count = Math.max(0, text.trim().split('\n').length - 1);
+              if (count === 0) {
+                showMessage('0 leads found. Check: API key is set in Vercel (GOOGLE_PLACES_API_KEY), Places API is enabled for your key, and try different city/niche. Only businesses with website + email are included.', 'error');
+              } else {
+                showMessage('Done! ' + count + ' leads. CSV downloaded.', 'success');
+              }
+              setLoading(false);
+            });
+          }
+          return res.json().then(function (data) {
+            if (!res.ok) {
+              showMessage(data.error || 'Request failed', 'error');
+              setLoading(false);
+              return;
+            }
+            var jobId = data.job_id;
+            showMessage('Collecting leads... This may take a few minutes.', 'info');
+            function check() {
+              fetch('/api/status/' + jobId).then(function (r) { return r.json(); }).then(function (s) {
+                if (s.status === 'done') {
+                  showMessage('Done! ' + s.lead_count + ' leads. Download your CSV below.', 'success');
+                  msg.innerHTML = 'Done! ' + s.lead_count + ' leads. <a class="download" href="/api/download/' + jobId + '">Download CSV</a>';
+                  msg.className = 'success';
+                  setLoading(false);
+                  return;
+                }
+                if (s.status === 'error') {
+                  showMessage('Error: ' + (s.error || 'Unknown'), 'error');
+                  setLoading(false);
+                  return;
+                }
+                setTimeout(check, 2500);
+              });
+            }
+            check();
+          });
+        }).catch(function (err) {
+          showMessage('Network error: ' + err.message, 'error');
+          setLoading(false);
         });
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('text/csv')) {
-          const text = await res.text();
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
-          a.download = 'leads.csv';
-          a.click();
-          URL.revokeObjectURL(a.href);
-          const count = Math.max(0, text.trim().split('\n').length - 1);
-          if (count === 0) {
-            showMessage("0 leads found. Check: API key is set in Vercel (GOOGLE_PLACES_API_KEY), Places API is enabled for your key, and try different city/niche. Only businesses with website + email are included.", "error");
-          } else {
-            showMessage('Done! ' + count + ' leads. CSV downloaded.', 'success');
-          }
-          setLoading(false);
-          return;
-        }
-        const data = await res.json();
-        if (!res.ok) {
-          showMessage(data.error || 'Request failed', 'error');
-          setLoading(false);
-          return;
-        }
-        const jobId = data.job_id;
-        showMessage('Collecting leads... This may take a few minutes.', 'info');
-        const check = async () => {
-          const s = await fetch('/api/status/' + jobId).then(r => r.json());
-          if (s.status === 'done') {
-            showMessage('Done! ' + s.lead_count + ' leads. Download your CSV below.', 'success');
-            msg.innerHTML = 'Done! ' + s.lead_count + ' leads. <a class="download" href="/api/download/' + jobId + '">Download CSV</a>';
-            msg.className = 'success';
-            setLoading(false);
-            return;
-          }
-          if (s.status === 'error') {
-            showMessage('Error: ' + (s.error || 'Unknown'), 'error');
-            setLoading(false);
-            return;
-          }
-          setTimeout(check, 2500);
-        };
-        check();
-      } catch (err) {
-        showMessage('Network error: ' + err.message, 'error');
-        setLoading(false);
-      }
-    });
+      });
+    })();
   </script>
 </body>
 </html>
