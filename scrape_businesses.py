@@ -139,10 +139,12 @@ COLUMNS = [
     "niche",
     "city",
     "business_name",
+    "First_Name",
     "phone",
     "google_maps_url",
     "website_url",
     "emails_found",
+    "ReviewsCount",
 ]
 
 # On Vercel, filesystem is read-only except /tmp
@@ -258,6 +260,29 @@ def save_checkpoint(
     logging.info("Checkpoint saved: %d leads", len(leads))
 
 
+def _first_name_only(full: str) -> str:
+    """
+    Return a short first name / first part from a full business or owner string.
+    E.g. 'Zahnarzt Mannheim - Prof. Hassel, Dr. Hunecke' -> 'Zahnarzt'
+    """
+    if not full or not full.strip():
+        return ""
+    s = full.strip()
+    for sep in (",", " - ", " – ", " | "):
+        if sep in s:
+            s = s.split(sep)[0].strip()
+            if not s:
+                s = full.strip()
+            break
+    words = s.split()
+    if not words:
+        return ""
+    # Keep first 2 words (e.g. "Dr. Jessica", "Prof. Hassel") or first word only
+    max_words = 2 if any(w.rstrip(".").lower() in ("dr", "prof", "mr", "mrs", "fr") for w in words[:2]) else 1
+    short = " ".join(words[:max_words])
+    return short[:50].strip()
+
+
 def get_domain_for_dedup(website: str | None) -> str:
     """Extract domain from URL for deduplication."""
     if not website or not website.strip().startswith("http"):
@@ -327,8 +352,8 @@ def text_search_all_pages(
 
 
 def place_details(place_id: str, api_key: str) -> dict:
-    """Fetch place details: name, formatted_phone_number, website, url (Google Maps link)."""
-    fields = "name,formatted_phone_number,website,url"
+    """Fetch place details: name, formatted_phone_number, website, url, user_ratings_total."""
+    fields = "name,formatted_phone_number,website,url,user_ratings_total"
     url = (
         "https://maps.googleapis.com/maps/api/place/details/json"
         f"?place_id={quote(place_id)}"
@@ -423,15 +448,51 @@ def _pick_one_email(emails: list[str], website_url: str) -> str:
     return valid[0].strip()
 
 
+def _extract_owner_from_html(html: str) -> str:
+    """
+    Try to extract owner/contact name from page HTML (German and English patterns).
+    Returns empty string if nothing plausible found.
+    """
+    if not html or len(html) > 5_000_000:
+        return ""
+    owner = ""
+    # Meta author: <meta name="author" content="Name">
+    m = re.search(r'<meta\s+name=["\']author["\']\s+content=["\']([^"\']{2,80})["\']', html, re.I)
+    if m:
+        candidate = m.group(1).strip()
+        if re.match(r"^[\w\s.\-ÄäÖöÜüß']+$", candidate) and len(candidate) >= 2:
+            owner = candidate
+    # German: Inhaber:, Geschäftsführer:, Inhaberin:
+    if not owner:
+        m = re.search(
+            r"(?:Inhaber|Geschäftsführer|Inhaberin|Owner|Proprietor)\s*:?\s*([A-Za-zÄäÖöÜüß\-'\s.]{2,60})",
+            html,
+            re.I,
+        )
+        if m:
+            candidate = m.group(1).strip()
+            candidate = re.sub(r"\s+", " ", candidate)
+            if len(candidate) >= 2 and not re.search(r"^\d+$", candidate):
+                owner = candidate
+    # Schema.org "name" in Person / owner context (simple heuristic)
+    if not owner and '"@type":"Person"' in html.replace(" ", ""):
+        m = re.search(r'"name"\s*:\s*"([^"]{2,60})"', html)
+        if m:
+            candidate = m.group(1).strip()
+            if re.match(r"^[\w\s.\-ÄäÖöÜüß']+$", candidate):
+                owner = candidate
+    return owner[:80].strip() if owner else ""
+
+
 def extract_emails_from_website(
     url: str, sleep_seconds: float = 0.05
-) -> tuple[list[str], str]:
+) -> tuple[list[str], str, str]:
     """
-    Fetch page, extract email-like strings, filter false positives, pick one valid email.
-    Returns (list with 0 or 1 email, source_url). The one email is the best match (same domain as website).
+    Fetch page, extract email-like strings and optional owner name.
+    Returns (list with 0 or 1 email, source_url, owner_name).
     """
     if not url or not url.strip().startswith("http"):
-        return [], ""
+        return [], "", ""
     raw = set()
     email_re = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
     try:
@@ -444,10 +505,11 @@ def extract_emails_from_website(
             e = m.group(0).strip()
             raw.add(e)
         one = _pick_one_email(sorted(raw), url)
-        return ([one] if one else [], url)
+        owner = _extract_owner_from_html(html)
+        return ([one] if one else [], url, owner)
     except Exception as e:
         logging.debug("Email extraction failed for %s: %s", url, e)
-        return [], ""
+        return [], "", ""
 
 
 def export_csv(
@@ -472,6 +534,10 @@ def export_csv(
             rows = leads
     else:
         rows = leads
+    for lead in rows:
+        for col in COLUMNS:
+            if col not in lead:
+                lead[col] = 0 if col == "ReviewsCount" else ""
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
         writer.writeheader()
@@ -562,14 +628,23 @@ def _fetch_details_task(
     raw_phone = details.get("formatted_phone_number") or ""
     phone = format_phone_with_country_code(raw_phone)
     maps_url = details.get("url") or ""
+    reviews_count = details.get("user_ratings_total")
+    if reviews_count is None or (isinstance(reviews_count, (int, float)) and reviews_count < 0):
+        reviews_count = 0
+    try:
+        reviews_count = int(reviews_count)
+    except (TypeError, ValueError):
+        reviews_count = 0
     lead = {
         "niche": niche,
         "city": city,
         "business_name": name,
+        "First_Name": _first_name_only(name),
         "phone": phone,
         "google_maps_url": maps_url,
         "website_url": website,
         "emails_found": "Nill",
+        "ReviewsCount": reviews_count,
     }
     return (lead, website)
 
@@ -587,11 +662,14 @@ def _extract_email_task(
     """Extract emails and append to leads if found. Returns True if lead was added."""
     lead, website = lead_website
     try:
-        emails, _ = extract_emails_from_website(website, sleep_seconds=sleep_web)
+        emails, _, owner_name = extract_emails_from_website(website, sleep_seconds=sleep_web)
         one_email = emails[0] if emails else ""
         if not one_email:
             return False
         lead["emails_found"] = one_email
+        if owner_name and owner_name.strip():
+            lead["First_Name"] = _first_name_only(owner_name.strip())
+        # else First_Name stays as short business name (set in _fetch_details_task)
         with lock:
             if len(leads) >= max_leads:
                 return False
