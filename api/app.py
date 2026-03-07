@@ -1,11 +1,6 @@
-"""
-Flask app for Lead Dataset Builder (Vercel serverless entry in api/).
-Set GOOGLE_PLACES_API_KEY in env on Vercel.
-"""
 import sys
 from pathlib import Path
 
-# Ensure project root is on path so we can import scrape_businesses
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
@@ -20,7 +15,6 @@ from threading import Thread
 
 from flask import Flask, Response, jsonify, render_template_string, request, send_file
 
-# Static script: no template vars, so URL/query string can never be injected into JS.
 LEADS_FORM_JS = r"""
 (function () {
   var form = document.getElementById('form');
@@ -313,116 +307,524 @@ INDEX_HTML = """
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Lead Dataset Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Syne:wght@600;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg-base: #080810;
+      --bg-card: rgba(255,255,255,0.05);
+      --bg-card-hover: rgba(255,255,255,0.08);
+      --accent: #7C6FCD;
+      --accent-bright: #A594F9;
+      --accent-cyan: #22D3EE;
+      --accent-pink: #F472B6;
+      --accent-amber: #FBBF24;
+      --accent-glow: rgba(124, 111, 205, 0.4);
+      --border: rgba(255,255,255,0.1);
+      --border-hover: rgba(165,148,249,0.5);
+      --text-primary: #F0EDFF;
+      --text-muted: #9CA3B8;
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+    }
     * { box-sizing: border-box; }
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      max-width: 480px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      background: #0f0f12;
-      color: #e4e4e7;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      padding: 1.5rem 1rem 2rem;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      position: relative;
+      overflow-x: hidden;
     }
-    h1 {
-      font-size: 1.5rem;
+    .noise {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.4;
+      z-index: 0;
+    }
+    .noise svg {
+      width: 100%;
+      height: 100%;
+    }
+    .glow-wrap {
+      position: fixed;
+      top: -400px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px;
+      height: 900px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 40%,
+        rgba(124, 111, 205, 0.2) 0%,
+        rgba(34, 211, 238, 0.08) 40%,
+        rgba(244, 114, 182, 0.06) 60%,
+        transparent 75%);
+      animation: glowPulse 8s ease-in-out infinite;
+      z-index: 0;
+    }
+    .glow-wrap::after {
+      content: '';
+      position: absolute;
+      bottom: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 500px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(244, 114, 182, 0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    @keyframes glowPulse {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+    .page-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2rem 1.75rem;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.04),
+                  0 24px 48px -12px rgba(0,0,0,0.5),
+                  0 0 80px -20px rgba(124, 111, 205, 0.25),
+                  0 0 120px -30px rgba(34, 211, 238, 0.1);
+      transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
+      position: relative;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 21px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(124,111,205,0.4), transparent 30%, transparent 70%, rgba(34,211,238,0.2));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .card:hover {
+      border-color: rgba(255,255,255,0.15);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.06),
+                  0 24px 48px -12px rgba(0,0,0,0.5),
+                  0 0 100px -15px rgba(124, 111, 205, 0.35),
+                  0 0 140px -25px rgba(244, 114, 182, 0.12);
+    }
+    .header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+      animation: fadeSlideUp 0.5s var(--ease) forwards;
+    }
+    .header-row h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+      background: linear-gradient(135deg, #F0EDFF 0%, #C4B5FD 50%, #A594F9 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.02em;
+    }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.7rem;
       font-weight: 600;
-      margin-bottom: 1.5rem;
-      color: #fafafa;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #86efac;
+      padding: 5px 12px;
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.12);
+      flex-shrink: 0;
+      box-shadow: 0 0 20px -4px rgba(34, 197, 94, 0.3);
     }
-    label {
-      display: block;
-      font-size: 0.875rem;
-      font-weight: 500;
-      margin-bottom: 0.35rem;
-      color: #a1a1aa;
+    .live-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .subtitle {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin: 0 0 1.75rem 0;
+      animation: fadeSlideUp 0.5s var(--ease) 0.05s both;
+    }
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), rgba(124,111,205,0.3), var(--border), transparent);
+      margin: 1.25rem 0;
+      border: none;
+    }
+    .field-group {
+      animation: fadeSlideUp 0.5s var(--ease) forwards;
+    }
+    .field-group.city-section { animation-delay: 0.1s; opacity: 0; }
+    .field-group.niche-section { animation-delay: 0.2s; opacity: 0; }
+    .field-group.leads-section { animation-delay: 0.3s; opacity: 0; }
+    .field-group.btn-section { animation-delay: 0.4s; opacity: 0; }
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    .section-label::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--accent-bright);
+      flex-shrink: 0;
+    }
+    .field-group.niche-section .section-label::before { background: var(--accent-cyan); }
+    .field-group.leads-section .section-label::before { background: var(--accent-pink); }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border), transparent);
+      max-width: 120px;
+    }
+    .hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+      margin-bottom: 1rem;
     }
     select, input[type="number"] {
       width: 100%;
-      padding: 0.6rem 0.75rem;
-      margin-bottom: 0.5rem;
-      font-size: 1rem;
-      background: #18181b;
-      border: 1px solid #3f3f46;
-      border-radius: 8px;
-      color: #fafafa;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.95rem;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text-primary);
+      transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+    }
+    select:hover, input[type="number"]:hover {
+      border-color: rgba(255,255,255,0.12);
+    }
+    select:focus, input[type="number"]:focus {
+      outline: none;
+      border-color: var(--border-hover);
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 0 24px -4px rgba(124, 111, 205, 0.25);
     }
     select[multiple] {
       min-height: 120px;
       padding: 0.5rem;
     }
     select[multiple] option {
-      padding: 0.25rem 0;
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      transition: background 0.15s var(--ease), border-left 0.15s var(--ease);
     }
-    .hint {
-      font-size: 0.75rem;
-      color: #71717a;
-      margin-bottom: 1rem;
+    select[multiple] option:hover {
+      background: var(--bg-card-hover);
     }
-    select:focus, input:focus {
-      outline: none;
-      border-color: #6366f1;
+    select[multiple] option:checked {
+      background: linear-gradient(90deg, rgba(124, 111, 205, 0.35), rgba(34, 211, 238, 0.15));
     }
-    button {
+    select::-webkit-scrollbar {
+      width: 4px;
+    }
+    select::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    select::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+      border-radius: 4px;
+    }
+    .leads-input-wrap {
+      position: relative;
+    }
+    .leads-input-row {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(0,0,0,0.35);
+      transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+    }
+    .leads-input-row:focus-within {
+      border-color: var(--border-hover);
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 0 20px -4px rgba(244, 114, 182, 0.2);
+    }
+    .leads-input-row input {
+      border: none;
+      border-radius: 12px 0 0 12px;
+      background: transparent;
+      flex: 1;
+      min-width: 0;
+    }
+    .leads-input-row input:focus {
+      box-shadow: none;
+    }
+    .leads-step-btn {
+      width: 40px;
+      flex-shrink: 0;
+      border: none;
+      background: rgba(255,255,255,0.05);
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      cursor: pointer;
+      border-radius: 0 12px 12px 0;
+      transition: background 0.15s var(--ease), color 0.15s var(--ease);
+    }
+    .leads-step-btn:hover {
+      background: rgba(124, 111, 205, 0.2);
+      color: var(--accent-bright);
+    }
+    .leads-step-btn:first-of-type {
+      border-radius: 0;
+      border-left: 1px solid var(--border);
+    }
+    .leads-step-btn:last-of-type {
+      border-radius: 0 12px 12px 0;
+    }
+    .progress-bar-wrap {
+      height: 3px;
+      background: var(--border);
+      border-radius: 999px;
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: var(--leads-pct, 1%);
+      background: linear-gradient(90deg, var(--accent), var(--accent-bright), var(--accent-pink));
+      border-radius: 999px;
+      transition: width 0.3s var(--ease);
+      box-shadow: 0 0 12px -2px var(--accent-glow);
+    }
+    .max-hint {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.4rem;
+    }
+    #btn {
       width: 100%;
-      padding: 0.75rem 1rem;
+      padding: 0.9rem 1.25rem;
       font-size: 1rem;
-      font-weight: 500;
-      background: #6366f1;
+      font-weight: 600;
+      font-family: 'Syne', sans-serif;
       color: white;
       border: none;
-      border-radius: 8px;
+      border-radius: 14px;
       cursor: pointer;
       margin-top: 0.5rem;
+      background: linear-gradient(135deg, #7C6FCD 0%, #A594F9 40%, #C4B5FD 70%, #A594F9 100%);
+      background-size: 200% 200%;
+      box-shadow: 0 4px 24px -4px rgba(124, 111, 205, 0.5), 0 0 40px -10px rgba(244, 114, 182, 0.2);
+      transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), opacity 0.2s var(--ease), background-position 0.4s var(--ease);
     }
-    button:hover { background: #4f46e5; }
-    button:disabled {
-      background: #3f3f46;
+    #btn:hover:not(:disabled) {
+      transform: scale(1.02);
+      background-position: 100% 50%;
+      box-shadow: 0 8px 36px -4px rgba(124, 111, 205, 0.55), 0 0 50px -8px rgba(244, 114, 182, 0.25);
+    }
+    #btn:active:not(:disabled) {
+      transform: scale(0.98);
+      transition-duration: 0.1s;
+    }
+    #btn:disabled {
       cursor: not-allowed;
-      color: #71717a;
+      opacity: 0.85;
+      transform: none;
+    }
+    #btn:disabled .btn-label { visibility: hidden; }
+    #btn:disabled::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px;
+      height: 8px;
+      background: no-repeat center/contain;
+      background-image: radial-gradient(circle at 0 50%, white 30%, transparent 30%),
+                        radial-gradient(circle at 50% 50%, white 30%, transparent 30%),
+                        radial-gradient(circle at 100% 50%, white 30%, transparent 30%);
+      animation: dotPulse 0.8s ease-in-out infinite;
+    }
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    #btn {
+      position: relative;
     }
     #message {
-      margin-top: 1rem;
-      padding: 0.75rem;
-      border-radius: 8px;
+      margin-top: 1.25rem;
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
       font-size: 0.875rem;
       display: none;
+      border: 1px solid var(--border);
+      animation: fadeSlideUp 0.3s var(--ease);
     }
-    #message.info { background: #1e1b4b; color: #a5b4fc; display: block; }
-    #message.success { background: #14532d; color: #86efac; display: block; }
-    #message.error { background: #450a0a; color: #fca5a5; display: block; }
+    #message.info {
+      background: linear-gradient(135deg, rgba(124, 111, 205, 0.18), rgba(34, 211, 238, 0.08));
+      color: var(--accent-bright);
+      border-color: rgba(124, 111, 205, 0.3);
+      display: block;
+    }
+    #message.success {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(34, 211, 238, 0.06));
+      color: #86efac;
+      border-color: rgba(34, 197, 94, 0.35);
+      display: block;
+    }
+    #message.error {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(244, 114, 182, 0.08));
+      color: #fca5a5;
+      border-color: rgba(239, 68, 68, 0.35);
+      display: block;
+    }
     a.download {
       display: inline-block;
       margin-top: 0.5rem;
-      color: #818cf8;
+      color: var(--accent-bright);
       text-decoration: none;
+      font-weight: 500;
+      transition: color 0.15s var(--ease), text-shadow 0.15s var(--ease);
     }
-    a.download:hover { text-decoration: underline; }
+    a.download:hover { text-decoration: underline; color: var(--accent-cyan); text-shadow: 0 0 20px rgba(34, 211, 238, 0.4); }
+    @media (max-width: 375px) {
+      .card { padding: 1.5rem 1.25rem; }
+      .header-row h1 { font-size: 24px; }
+    }
   </style>
 </head>
 <body>
-  <h1>Lead Dataset Builder</h1>
-  <form id="form" data-max-leads="{{ max_leads_web | default(1000) | int }}">
-    <label for="city">Cities</label>
-    <select id="city" name="city" multiple size="8">
-      {% for c in cities %}
-      <option value="{{ c | e }}">{{ c | e }}</option>
-      {% endfor %}
-    </select>
-    <p class="hint">Hold Ctrl (Windows) or Cmd (Mac) to select multiple cities.</p>
-    <label for="niche">Niches</label>
-    <select id="niche" name="niche" multiple size="8">
-      {% for n in niches %}
-      <option value="{{ n | e }}">{{ n | e }}</option>
-      {% endfor %}
-    </select>
-    <p class="hint">Hold Ctrl (Windows) or Cmd (Mac) to select multiple niches.</p>
-    <label for="max_leads">How many leads?</label>
-    <input type="number" id="max_leads" name="max_leads" min="1" max="{{ max_leads_web }}" value="10" required>
-    <small style="color:#71717a; font-size:0.8rem;">Max {{ max_leads_web }} per run.{% if is_vercel %} (Vercel: runs up to ~5 min; you get all leads collected in that time.){% endif %}</small>
-    <button type="submit" id="btn">Get leads</button>
-  </form>
-  <div id="message" role="status"></div>
-
+  <div class="noise" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg">
+      <filter id="noise">
+        <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/>
+        <feColorMatrix type="saturate" values="0"/>
+      </filter>
+      <rect width="100%" height="100%" filter="url(#noise)"/>
+    </svg>
+  </div>
+  <div class="glow-wrap" aria-hidden="true"></div>
+  <div class="page-inner">
+    <div class="card">
+      <div class="header-row">
+        <div>
+          <h1>Lead Dataset Builder</h1>
+          <p class="subtitle">Build targeted lead lists in seconds.</p>
+        </div>
+        <span class="live-badge"><span class="dot"></span> LIVE</span>
+      </div>
+      <form id="form" data-max-leads="{{ max_leads_web | default(1000) | int }}">
+        <div class="field-group city-section">
+          <label class="section-label" for="city">Cities</label>
+          <select id="city" name="city" multiple size="8">
+            {% for c in cities %}
+            <option value="{{ c | e }}">{{ c | e }}</option>
+            {% endfor %}
+          </select>
+          <p class="hint">Hold Ctrl (Windows) or Cmd (Mac) to select multiple cities.</p>
+        </div>
+        <hr class="divider">
+        <div class="field-group niche-section">
+          <label class="section-label" for="niche">Niches</label>
+          <select id="niche" name="niche" multiple size="8">
+            {% for n in niches %}
+            <option value="{{ n | e }}">{{ n | e }}</option>
+            {% endfor %}
+          </select>
+          <p class="hint">Hold Ctrl (Windows) or Cmd (Mac) to select multiple niches.</p>
+        </div>
+        <hr class="divider">
+        <div class="field-group leads-section">
+          <label class="section-label" for="max_leads">How many leads?</label>
+          <div class="leads-input-wrap">
+            <div class="leads-input-row">
+              <input type="number" id="max_leads" name="max_leads" min="1" max="{{ max_leads_web }}" value="10" required>
+              <button type="button" class="leads-step-btn" id="leads-minus" aria-label="Decrease">−</button>
+              <button type="button" class="leads-step-btn" id="leads-plus" aria-label="Increase">+</button>
+            </div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" id="leads-progress"></div>
+            </div>
+          </div>
+          <small class="max-hint">Max {{ max_leads_web }} per run.{% if is_vercel %} (Vercel: runs up to ~5 min; you get all leads collected in that time.){% endif %}</small>
+        </div>
+        <div class="field-group btn-section">
+          <button type="submit" id="btn"><span class="btn-label">Get leads</span></button>
+        </div>
+      </form>
+      <div id="message" role="status"></div>
+    </div>
+  </div>
+  <script>
+    (function() {
+      var maxEl = document.getElementById('max_leads');
+      var progress = document.getElementById('leads-progress');
+      var form = document.getElementById('form');
+      var maxVal = parseInt(form.getAttribute('data-max-leads'), 10) || 1000;
+      function updateProgress() {
+        var v = parseInt(maxEl.value, 10) || 0;
+        v = Math.min(maxVal, Math.max(1, v));
+        progress.style.setProperty('--leads-pct', (v / maxVal * 100) + '%');
+      }
+      maxEl.addEventListener('input', updateProgress);
+      maxEl.addEventListener('change', updateProgress);
+      document.getElementById('leads-minus').addEventListener('click', function() {
+        var v = parseInt(maxEl.value, 10) || 10;
+        maxEl.value = Math.max(1, v - 1);
+        updateProgress();
+      });
+      document.getElementById('leads-plus').addEventListener('click', function() {
+        var v = parseInt(maxEl.value, 10) || 10;
+        maxEl.value = Math.min(maxVal, v + 1);
+        updateProgress();
+      });
+      updateProgress();
+    })();
+  </script>
   <script src="/static/leads-form.js"></script>
 </body>
 </html>

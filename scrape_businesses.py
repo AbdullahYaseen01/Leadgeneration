@@ -1,8 +1,3 @@
-"""
-Lead Dataset Builder - Compliant business lead collection via Google Places API.
-Supports checkpoint/resume and optional email extraction from business websites.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -21,12 +16,10 @@ from urllib.parse import quote, urlparse
 
 
 class GooglePlacesAPIError(Exception):
-    """Raised when Google Places API returns an error (e.g. REQUEST_DENIED, OVER_QUERY_LIMIT)."""
+    pass
 
 
-# Constants
 CITIES = [
-    # Original 8 (Baden-Württemberg)
     "Mannheim",
     "Heidelberg",
     "Heilbronn",
@@ -35,7 +28,6 @@ CITIES = [
     "Reutlingen",
     "Tübingen",
     "Esslingen am Neckar",
-    # +20 more cities (Germany)
     "Stuttgart",
     "Karlsruhe",
     "Freiburg im Breisgau",
@@ -62,7 +54,6 @@ CITIES = [
 ]
 
 NICHES = [
-    # Original 11
     "Physical therapists",
     "Dentists",
     "Auto repair shops",
@@ -74,7 +65,6 @@ NICHES = [
     "Pet services",
     "Plumbing & heating",
     "Gardening & landscaping",
-    # +20 more niches
     "Hair salons",
     "Restaurants",
     "Cafes",
@@ -98,7 +88,6 @@ NICHES = [
     "Catering",
 ]
 
-# Extra search terms per niche (e.g. German) to get more results for one city+niche (e.g. 100+ leads)
 NICHE_SEARCH_VARIATIONS: dict[str, list[str]] = {
     "Physical therapists": ["Physical therapists", "Physiotherapeut", "Physiotherapie", "Physio"],
     "Dentists": ["Dentists", "Zahnarzt", "Zahnarztpraxis", "Zahnärzte"],
@@ -111,7 +100,6 @@ NICHE_SEARCH_VARIATIONS: dict[str, list[str]] = {
     "Pet services": ["Pet services", "Tierarzt", "Hundesalon", "Tierpflege"],
     "Plumbing & heating": ["Plumbing", "Klempner", "Heizung", "Sanitär"],
     "Gardening & landscaping": ["Gardening", "Gartenbau", "Landschaftsgestaltung", "Gärtner"],
-    # New niches with German variations
     "Hair salons": ["Hair salon", "Friseur", "Friseursalon", "Haarsalon"],
     "Restaurants": ["Restaurant", "Restaurants", "Gaststätte", "Essen"],
     "Cafes": ["Cafe", "Café", "Kaffee", "Kaffeebar"],
@@ -147,7 +135,6 @@ COLUMNS = [
     "ReviewsCount",
 ]
 
-# On Vercel, filesystem is read-only except /tmp
 if os.environ.get("VERCEL"):
     OUTPUT_DIR = Path("/tmp")
 else:
@@ -158,21 +145,15 @@ CHECKPOINT_INTERVAL = 100
 MAX_RESULTS_PER_SEARCH = 20
 REQUEST_TIMEOUT = 15
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-# Parallel workers for speed (1000+ leads)
 PLACE_DETAIL_WORKERS = 12
 EMAIL_EXTRACT_WORKERS = 20
-TEXT_SEARCH_MAX_PAGES = 5  # 20 * 5 = 100 results per query (more leads per city/niche)
-PAGE_TOKEN_DELAY = 2.0  # seconds before using next_page_token (Google requirement)
+TEXT_SEARCH_MAX_PAGES = 5
+PAGE_TOKEN_DELAY = 2.0
 
-# Default country code for phone numbers (cities are in Germany)
 DEFAULT_PHONE_COUNTRY_CODE = "+49"
 
 
 def format_phone_with_country_code(phone: str | None) -> str:
-    """
-    Normalize phone to include country code. German numbers: remove leading 0, add +49.
-    E.g. '0621 39182930' -> '+49 621 39182930', '0176 87830185' -> '+49 176 87830185'.
-    """
     if not phone or not str(phone).strip():
         return "Nill"
     s = re.sub(r"\s+", " ", str(phone).strip())
@@ -180,15 +161,13 @@ def format_phone_with_country_code(phone: str | None) -> str:
         return "Nill"
     if s.startswith("+"):
         return s
-    # Assume Germany: strip leading 0 and add +49
     if s.startswith("0"):
         s = s[1:]
     return f"{DEFAULT_PHONE_COUNTRY_CODE} {s}" if s else "Nill"
 
 
 def setup_logging(verbose: bool = False) -> None:
-    """Configure logging."""
-    level = logging.DEBUG if verbose else logging.INFO
+    level = logging.DEBUG if verbose else logging.INFO if verbose else logging.INFO
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -197,7 +176,6 @@ def setup_logging(verbose: bool = False) -> None:
 
 
 def load_config(config_path: Path) -> dict:
-    """Load configuration from JSON file or env. Exits if no API key found."""
     config = {}
     if config_path.exists():
         with open(config_path, encoding="utf-8") as f:
@@ -220,8 +198,7 @@ def load_config(config_path: Path) -> dict:
 
 
 def load_checkpoint(checkpoint_file: Path | None = None) -> tuple[list[dict], set[str], set[str]]:
-    """Load checkpoint if exists. Returns (leads, seen_place_ids, seen_domains)."""
-    cf = checkpoint_file or CHECKPOINT_FILE
+    cf = checkpoint_file or CHECKPOINT_FILE or CHECKPOINT_FILE
     if not cf.exists():
         return [], set(), set()
 
@@ -247,8 +224,7 @@ def save_checkpoint(
     seen_domains: set[str],
     checkpoint_file: Path | None = None,
 ) -> None:
-    """Save checkpoint to file."""
-    cf = checkpoint_file or CHECKPOINT_FILE
+    cf = checkpoint_file or CHECKPOINT_FILE or CHECKPOINT_FILE
     cf.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "leads": leads,
@@ -261,10 +237,6 @@ def save_checkpoint(
 
 
 def _first_name_only(full: str) -> str:
-    """
-    Return a short first name / first part from a full business or owner string.
-    E.g. 'Zahnarzt Mannheim - Prof. Hassel, Dr. Hunecke' -> 'Zahnarzt'
-    """
     if not full or not full.strip():
         return ""
     s = full.strip()
@@ -277,14 +249,12 @@ def _first_name_only(full: str) -> str:
     words = s.split()
     if not words:
         return ""
-    # Keep first 2 words (e.g. "Dr. Jessica", "Prof. Hassel") or first word only
     max_words = 2 if any(w.rstrip(".").lower() in ("dr", "prof", "mr", "mrs", "fr") for w in words[:2]) else 1
     short = " ".join(words[:max_words])
     return short[:50].strip()
 
 
 def get_domain_for_dedup(website: str | None) -> str:
-    """Extract domain from URL for deduplication."""
     if not website or not website.strip().startswith("http"):
         return ""
     try:
@@ -297,7 +267,6 @@ def get_domain_for_dedup(website: str | None) -> str:
 def text_search(
     query: str, api_key: str, page_token: str | None = None
 ) -> tuple[list[dict], str | None]:
-    """Google Places Text Search. Returns (results, next_page_token or None)."""
     if page_token:
         url = (
             "https://maps.googleapis.com/maps/api/place/textsearch/json"
@@ -338,7 +307,6 @@ def text_search(
 def text_search_all_pages(
     query: str, api_key: str, max_pages: int = TEXT_SEARCH_MAX_PAGES
 ) -> list[dict]:
-    """Fetch up to max_pages of text search results (20 per page)."""
     all_results: list[dict] = []
     page_token: str | None = None
     for _ in range(max_pages):
@@ -352,7 +320,6 @@ def text_search_all_pages(
 
 
 def place_details(place_id: str, api_key: str) -> dict:
-    """Fetch place details: name, formatted_phone_number, website, url, user_ratings_total."""
     fields = "name,formatted_phone_number,website,url,user_ratings_total"
     url = (
         "https://maps.googleapis.com/maps/api/place/details/json"
@@ -382,13 +349,11 @@ def place_details(place_id: str, api_key: str) -> dict:
     return out.get("result", {})
 
 
-# File/asset extensions that are not real email domains (false positives from HTML)
 EMAIL_FALSE_POSITIVE_EXTENSIONS = (
     ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico",
     ".woff", ".woff2", ".ttf", ".eot", ".otf",
     ".css", ".js", ".map",
 )
-# Domains to never treat as business email (widgets, trackers, etc.)
 EMAIL_BLOCKED_DOMAINS = (
     "example.com", "example.org", "sentry.io", "wixpress.com",
     "personio.de", "personio.com", "kzv-sh.de", "google.com",
@@ -398,18 +363,14 @@ EMAIL_BLOCKED_DOMAINS = (
 
 
 def _is_valid_business_email(email: str, website_url: str) -> bool:
-    """Return False if email is clearly a false positive (image path, blocked domain, etc.)."""
     if not email or len(email) < 6 or "@" not in email:
         return False
     e = email.strip().lower()
-    # URL-encoded or junk
     if "%" in e or " " in e or "/" in e or "\\" in e:
         return False
-    # Image/font/file paths mistaken as email
     for ext in EMAIL_FALSE_POSITIVE_EXTENSIONS:
         if e.endswith(ext) or ext in e.split("@")[-1]:
             return False
-    # Domain part looks like a filename (e.g. 2x.png, 261w.jpeg)
     domain = e.split("@")[-1]
     if re.search(r"\d+w\.(jpeg|jpg|png|webp|gif)", domain):
         return False
@@ -422,13 +383,9 @@ def _is_valid_business_email(email: str, website_url: str) -> bool:
 
 
 def _pick_one_email(emails: list[str], website_url: str) -> str:
-    """
-    From a list of candidate emails, return exactly one: prefer same domain as website.
-    """
     website_domain = ""
     try:
         website_domain = urlparse(website_url.strip()).netloc.lower()
-        # strip www
         if website_domain.startswith("www."):
             website_domain = website_domain[4:]
     except Exception:
@@ -436,10 +393,8 @@ def _pick_one_email(emails: list[str], website_url: str) -> str:
     valid = [e for e in emails if _is_valid_business_email(e, website_url)]
     if not valid:
         return ""
-    # Prefer email whose domain matches the business website
     same_domain = [e for e in valid if website_domain and e.split("@")[-1].lower() == website_domain]
     if same_domain:
-        # Prefer info@, kontakt@, buero@, then first
         for prefix in ("info@", "kontakt@", "buero@", "office@", "mail@", "contact@"):
             for e in same_domain:
                 if e.lower().startswith(prefix):
@@ -449,20 +404,14 @@ def _pick_one_email(emails: list[str], website_url: str) -> str:
 
 
 def _extract_owner_from_html(html: str) -> str:
-    """
-    Try to extract owner/contact name from page HTML (German and English patterns).
-    Returns empty string if nothing plausible found.
-    """
     if not html or len(html) > 5_000_000:
         return ""
     owner = ""
-    # Meta author: <meta name="author" content="Name">
     m = re.search(r'<meta\s+name=["\']author["\']\s+content=["\']([^"\']{2,80})["\']', html, re.I)
     if m:
         candidate = m.group(1).strip()
         if re.match(r"^[\w\s.\-ÄäÖöÜüß']+$", candidate) and len(candidate) >= 2:
             owner = candidate
-    # German: Inhaber:, Geschäftsführer:, Inhaberin:
     if not owner:
         m = re.search(
             r"(?:Inhaber|Geschäftsführer|Inhaberin|Owner|Proprietor)\s*:?\s*([A-Za-zÄäÖöÜüß\-'\s.]{2,60})",
@@ -474,7 +423,6 @@ def _extract_owner_from_html(html: str) -> str:
             candidate = re.sub(r"\s+", " ", candidate)
             if len(candidate) >= 2 and not re.search(r"^\d+$", candidate):
                 owner = candidate
-    # Schema.org "name" in Person / owner context (simple heuristic)
     if not owner and '"@type":"Person"' in html.replace(" ", ""):
         m = re.search(r'"name"\s*:\s*"([^"]{2,60})"', html)
         if m:
@@ -487,10 +435,6 @@ def _extract_owner_from_html(html: str) -> str:
 def extract_emails_from_website(
     url: str, sleep_seconds: float = 0.05
 ) -> tuple[list[str], str, str]:
-    """
-    Fetch page, extract email-like strings and optional owner name.
-    Returns (list with 0 or 1 email, source_url, owner_name).
-    """
     if not url or not url.strip().startswith("http"):
         return [], "", ""
     raw = set()
@@ -517,11 +461,6 @@ def export_csv(
     output_path: Path,
     require_email_and_website: bool = False,
 ) -> None:
-    """
-    Export leads to CSV.
-    If require_email_and_website, only export leads with both email and website;
-    if none match, export all so CSV is never empty.
-    """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if require_email_and_website:
@@ -546,7 +485,6 @@ def export_csv(
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Lead Dataset Builder - Google Places API",
     )
@@ -608,7 +546,6 @@ def _fetch_details_task(
     seen_domains: set[str],
     lock: threading.Lock,
 ) -> tuple[dict, str] | None:
-    """Fetch place details; return (lead_dict, website) if has website and new domain, else None."""
     place_id, niche, city, name_from_search = item
     details = place_details(place_id, api_key)
     website = (details.get("website") or "").strip()
@@ -659,7 +596,6 @@ def _extract_email_task(
     seen_place_ids: set[str],
     seen_domains: set[str],
 ) -> bool:
-    """Extract emails and append to leads if found. Returns True if lead was added."""
     lead, website = lead_website
     try:
         emails, _, owner_name = extract_emails_from_website(website, sleep_seconds=sleep_web)
@@ -669,7 +605,6 @@ def _extract_email_task(
         lead["emails_found"] = one_email
         if owner_name and owner_name.strip():
             lead["First_Name"] = _first_name_only(owner_name.strip())
-        # else First_Name stays as short business name (set in _fetch_details_task)
         with lock:
             if len(leads) >= max_leads:
                 return False
@@ -696,13 +631,10 @@ def run_google(
     niches: list[str] | None = None,
     max_time_seconds: float | None = None,
 ) -> None:
-    """Collect leads using Google Places API with parallel place details and email extraction.
-    If max_time_seconds is set, stop when that many seconds have elapsed (for Vercel/serverless).
-    """
     cities = cities if cities is not None else CITIES
     niches = niches if niches is not None else NICHES
     lock = threading.Lock()
-    sleep_api = min(sleep_api, 0.25)  # cap for speed
+    sleep_api = min(sleep_api, 0.25)
     sleep_web = min(sleep_web, 0.15)
     deadline = (time.time() + max_time_seconds) if max_time_seconds else None
 
@@ -715,7 +647,6 @@ def run_google(
         for city in cities:
             if not time_left() or len(leads) >= max_leads:
                 break
-            # Use multiple search variations (e.g. German terms) to get more than 60 results per city+niche
             search_terms = NICHE_SEARCH_VARIATIONS.get(niche, [niche])
             all_results: list[dict] = []
             seen_in_batch: set[str] = set()
@@ -731,7 +662,6 @@ def run_google(
                     if place_id and place_id not in seen_in_batch:
                         seen_in_batch.add(place_id)
                         all_results.append(r)
-            # Build list of (place_id, niche, city, name) not yet seen globally
             batch: list[tuple[str, str, str, str]] = []
             for r in all_results:
                 place_id = r.get("place_id")
@@ -745,7 +675,6 @@ def run_google(
             if not batch:
                 continue
 
-            # Parallel place details
             candidates: list[tuple[dict, str]] = []
             with ThreadPoolExecutor(max_workers=PLACE_DETAIL_WORKERS) as executor:
                 futures = {
@@ -770,7 +699,6 @@ def run_google(
             if not candidates or len(leads) >= max_leads:
                 continue
 
-            # Parallel email extraction
             with ThreadPoolExecutor(max_workers=EMAIL_EXTRACT_WORKERS) as executor:
                 futures = {
                     executor.submit(
@@ -798,7 +726,6 @@ def run_google(
 
 
 def main() -> None:
-    """Main entry point."""
     args = parse_args()
     setup_logging(args.verbose)
 
@@ -850,10 +777,6 @@ def run_collection_for_city_niche(
     sleep_api: float = 0.2,
     sleep_web: float = 0.1,
 ) -> list[dict]:
-    """
-    Run lead collection for a single city and niche. Returns list of lead dicts.
-    Used by the web frontend; does not use checkpoint.
-    """
     return run_collection_for_cities_niches(
         api_key=api_key,
         cities=[city.strip()],
@@ -875,10 +798,6 @@ def run_collection_for_cities_niches(
     sleep_web: float = 0.1,
     max_time_seconds: float | None = None,
 ) -> list[dict]:
-    """
-    Run lead collection for multiple cities and niches. Returns list of lead dicts.
-    If max_time_seconds is set (e.g. on Vercel), stops when time is up and returns whatever was collected.
-    """
     cities = [c.strip() for c in cities if c and str(c).strip()]
     niches = [n.strip() for n in niches if n and str(n).strip()]
     if not cities or not niches:
