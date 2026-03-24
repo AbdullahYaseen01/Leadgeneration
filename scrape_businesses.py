@@ -294,6 +294,10 @@ def text_search(
         status = out.get("status", "UNKNOWN")
         err_msg = out.get("error_message", "")
         logging.warning("API %s: %s", status, err_msg)
+        # Google can return INVALID_REQUEST for a fresh next_page_token
+        # until it becomes valid; treat that as non-fatal and stop paging.
+        if status == "INVALID_REQUEST" and page_token:
+            return [], None
         if status in ("REQUEST_DENIED", "OVER_QUERY_LIMIT", "INVALID_REQUEST"):
             raise GooglePlacesAPIError(
                 f"Google Places API {status}: {err_msg or 'Check your API key and that Places API is enabled.'}"
