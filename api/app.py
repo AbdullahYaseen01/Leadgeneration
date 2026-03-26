@@ -29,6 +29,11 @@ LEADS_FORM_JS = r"""
   var cityEl = document.getElementById('city');
   var nicheEl = document.getElementById('niche');
   var maxEl = document.getElementById('max_leads');
+  var cityTopBtn = document.getElementById('city-top-20');
+  var cityAllBtn = document.getElementById('city-all');
+  var cityClearBtn = document.getElementById('city-clear');
+  var nicheAllBtn = document.getElementById('niche-all');
+  var nicheClearBtn = document.getElementById('niche-clear');
   if (urlCities.length > 0 && cityEl) {
     Array.from(cityEl.options).forEach(function (opt) { opt.selected = urlCities.indexOf(opt.value) !== -1; });
   }
@@ -37,6 +42,52 @@ LEADS_FORM_JS = r"""
   }
   if (!isNaN(urlMax) && urlMax >= 1 && urlMax <= maxLeads && maxEl) {
     maxEl.value = urlMax;
+  }
+
+  function setSelectedByIndex(selectEl, indexSet) {
+    if (!selectEl) return;
+    Array.from(selectEl.options).forEach(function (opt, idx) {
+      opt.selected = indexSet.has(idx);
+    });
+  }
+
+  function setAllSelected(selectEl, selected) {
+    if (!selectEl) return;
+    Array.from(selectEl.options).forEach(function (opt) {
+      opt.selected = selected;
+    });
+  }
+
+  if (cityTopBtn) {
+    cityTopBtn.addEventListener('click', function () {
+      var top = new Set(Array.from({ length: Math.min(20, cityEl.options.length) }, function (_, i) { return i; }));
+      setSelectedByIndex(cityEl, top);
+      showMessage('Selected top 20 cities.', 'info');
+    });
+  }
+  if (cityAllBtn) {
+    cityAllBtn.addEventListener('click', function () {
+      setAllSelected(cityEl, true);
+      showMessage('Selected all cities.', 'info');
+    });
+  }
+  if (cityClearBtn) {
+    cityClearBtn.addEventListener('click', function () {
+      setAllSelected(cityEl, false);
+      showMessage('Cleared city selection.', 'info');
+    });
+  }
+  if (nicheAllBtn) {
+    nicheAllBtn.addEventListener('click', function () {
+      setAllSelected(nicheEl, true);
+      showMessage('Selected all niches.', 'info');
+    });
+  }
+  if (nicheClearBtn) {
+    nicheClearBtn.addEventListener('click', function () {
+      setAllSelected(nicheEl, false);
+      showMessage('Cleared niche selection.', 'info');
+    });
   }
 
   function showMessage(text, type) {
@@ -517,6 +568,28 @@ INDEX_HTML = """
       flex-shrink: 0;
     }
     .field-group.niche-section .section-label::before { background: var(--accent-cyan); }
+    .quick-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.6rem;
+      flex-wrap: wrap;
+    }
+    .quick-btn {
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      padding: 0.35rem 0.65rem;
+      border-radius: 0.55rem;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.15s var(--ease), border-color 0.15s var(--ease), background 0.15s var(--ease);
+    }
+    .quick-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(167, 139, 250, 0.55);
+      background: rgba(167, 139, 250, 0.14);
+    }
     .field-group.leads-section .section-label::before { background: var(--accent-pink); }
     .section-label::after {
       content: '';
@@ -765,6 +838,11 @@ INDEX_HTML = """
             <option value="{{ c | e }}">{{ c | e }}</option>
             {% endfor %}
           </select>
+          <div class="quick-actions">
+            <button type="button" class="quick-btn" id="city-top-20">Top 20</button>
+            <button type="button" class="quick-btn" id="city-all">All cities</button>
+            <button type="button" class="quick-btn" id="city-clear">Clear</button>
+          </div>
           <p class="hint">Hold Ctrl (Windows) or Cmd (Mac) to select multiple cities.</p>
         </div>
         <hr class="divider">
@@ -775,6 +853,10 @@ INDEX_HTML = """
             <option value="{{ n | e }}">{{ n | e }}</option>
             {% endfor %}
           </select>
+          <div class="quick-actions">
+            <button type="button" class="quick-btn" id="niche-all">All niches</button>
+            <button type="button" class="quick-btn" id="niche-clear">Clear</button>
+          </div>
           <p class="hint">Hold Ctrl (Windows) or Cmd (Mac) to select multiple niches.</p>
         </div>
         <hr class="divider">
