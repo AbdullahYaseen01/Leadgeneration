@@ -202,10 +202,23 @@
       renderTree();
     }
 
+    var dropdownOpen = false;
+
+    function setDropdownOpen(open) {
+      if (!dd || !btnOpen) return;
+      dropdownOpen = !!open;
+      dd.hidden = !dropdownOpen;
+      btnOpen.setAttribute("aria-expanded", dropdownOpen ? "true" : "false");
+    }
+
     if (searchEl) {
       searchEl.addEventListener("input", function () {
         searchQ = searchEl.value || "";
         renderTree();
+        setDropdownOpen(true);
+      });
+      searchEl.addEventListener("focus", function () {
+        if ((searchEl.value || "").trim()) setDropdownOpen(true);
       });
     }
 
@@ -217,12 +230,9 @@
       });
     }
 
-    var dropdownOpen = false;
     if (btnOpen && dd) {
       btnOpen.addEventListener("click", function () {
-        dropdownOpen = !dropdownOpen;
-        dd.hidden = !dropdownOpen;
-        btnOpen.setAttribute("aria-expanded", dropdownOpen ? "true" : "false");
+        setDropdownOpen(!dropdownOpen);
       });
     }
 
