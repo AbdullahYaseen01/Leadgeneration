@@ -646,6 +646,39 @@ INDEX_HTML = """
       transform: scale(1.06);
       box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
     }
+    .loc-country-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.65rem;
+    }
+    .loc-country-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .loc-country-select {
+      max-width: 280px;
+      width: 100%;
+      padding: 0.55rem 0.85rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      font-family: inherit;
+      color: #0f172a;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+      cursor: pointer;
+    }
+    .loc-country-select:focus {
+      outline: none;
+      border-color: rgba(124, 111, 205, 0.55);
+      box-shadow: 0 0 0 3px rgba(124, 111, 205, 0.2);
+    }
     .loc-try {
       font-size: 0.8rem;
       color: var(--text-muted);
@@ -669,6 +702,11 @@ INDEX_HTML = """
       background: rgba(59, 130, 246, 0.22);
       border-color: rgba(96, 165, 250, 0.45);
       transform: translateY(-1px);
+    }
+    .loc-try a.loc-try-nope {
+      opacity: 0.42;
+      cursor: not-allowed;
+      pointer-events: none;
     }
     .loc-panels {
       display: flex;
@@ -767,10 +805,10 @@ INDEX_HTML = """
       display: flex;
       flex-wrap: wrap;
       gap: 0.45rem;
-      min-height: 2.25rem;
-      margin-bottom: 0.65rem;
+      min-height: 0;
+      margin-bottom: 0;
       align-items: center;
-      padding: 0.35rem 0;
+      padding: 0;
     }
     .loc-pill {
       display: inline-flex;
@@ -809,9 +847,23 @@ INDEX_HTML = """
       transition: background 0.15s, color 0.15s;
     }
     .loc-pill-x:hover { color: #0f172a; background: rgba(255, 255, 255, 0.95); }
+    .loc-search-inner {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem;
+      min-width: 0;
+      padding: 0.4rem 0.5rem 0.4rem 0.65rem;
+    }
+    .loc-search-inner .loc-pills {
+      flex: 0 1 auto;
+      max-width: 100%;
+    }
     .loc-search-row {
       display: flex;
       gap: 0;
+      align-items: stretch;
       border: 1px solid rgba(148, 163, 184, 0.45);
       border-radius: 12px;
       overflow: hidden;
@@ -829,9 +881,9 @@ INDEX_HTML = """
     }
     .loc-search {
       flex: 1;
-      min-width: 0;
+      min-width: 140px;
       border: none;
-      padding: 0.6rem 0.8rem;
+      padding: 0.35rem 0.25rem;
       font-size: 0.88rem;
       font-family: inherit;
       color: #0f172a;
@@ -857,7 +909,7 @@ INDEX_HTML = """
       border: 1px solid rgba(148, 163, 184, 0.35);
       border-radius: 12px;
       background: linear-gradient(180deg, #ffffff, #fafbfc);
-      max-height: 280px;
+      max-height: min(55vh, 380px);
       overflow: auto;
       margin-bottom: 0.5rem;
       box-shadow:
@@ -927,6 +979,42 @@ INDEX_HTML = """
       transition: background 0.12s;
     }
     .loc-city-row:hover { background: rgba(124, 111, 205, 0.06); }
+    .loc-tree-state {
+      margin-bottom: 0.4rem;
+      border-left: 1px dotted rgba(148, 163, 184, 0.85);
+      padding-left: 0.45rem;
+      margin-left: 0.15rem;
+    }
+    .loc-tree-row {
+      position: relative;
+    }
+    .loc-city-tree {
+      margin: 0.1rem 0 0.35rem 0.5rem;
+      padding-left: 0.5rem;
+      border-left: 1px dotted rgba(203, 213, 225, 0.95);
+    }
+    .loc-city-node { margin-bottom: 0.25rem; }
+    .loc-city-head { display: flex; align-items: center; gap: 0.4rem; padding: 0.12rem 0; }
+    .loc-city-name { font-size: 0.82rem; font-weight: 500; color: #334155; }
+    .loc-plz-block { margin: 0.05rem 0 0.2rem 0.25rem; padding-left: 0.65rem; border-left: 1px dotted rgba(226, 232, 240, 0.95); }
+    .loc-plz-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.12rem 0.15rem;
+      font-size: 0.78rem;
+      color: #475569;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .loc-plz-row:hover { background: rgba(124, 111, 205, 0.05); }
+    .loc-plz-label { user-select: none; }
+    .loc-exp-spacer {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
     .loc-custom-check {
       display: flex;
       align-items: center;
@@ -1185,21 +1273,30 @@ INDEX_HTML = """
           <div class="section-label-row locations-heading">
             <span class="section-label locations-label">Locations</span>
             <span class="req-star">*</span>
-            <span class="section-help" title="Pick regions, expand with +, then choose cities">?</span>
+            <span class="section-help" title="Pick a state (Bundesland/canton), expand cities, then postal codes — or select an entire state">?</span>
           </div>
-          <p class="loc-try">Try: <a href="#" data-focus-country="CH">CH</a> <a href="#" data-focus-country="DE">DE</a></p>
+          <div class="loc-country-bar">
+            <span class="loc-country-label">Country</span>
+            <select id="loc-country" class="loc-country-select" aria-label="Country">
+              <option value="DE">Germany</option>
+              <option value="CH">Switzerland</option>
+            </select>
+          </div>
+          <p class="loc-try">Try: <a href="#" class="loc-try-nope" title="Not in this dataset">US</a> <a href="#" class="loc-try-nope" title="Not in this dataset">GB</a> <a href="#" data-focus-country="DE">DE</a> <a href="#" class="loc-try-nope" title="Not in this dataset">CA</a> <a href="#" class="loc-try-nope" title="Not in this dataset">AU</a> <a href="#" data-focus-country="CH">CH</a></p>
           <div class="loc-panels">
-          <div class="loc-light-panel" id="loc-ch">
+          <div class="loc-light-panel" id="loc-ch" hidden>
             <div class="loc-panel-head">
               <span class="loc-code-badge">CH</span>
               <div class="loc-panel-title-wrap">
                 <div class="loc-panel-title"><span class="loc-flag" aria-hidden="true">🇨🇭</span> Switzerland</div>
-                <div class="loc-sub">100 cities — tick to select</div>
+                <div class="loc-sub">Cantons, cities &amp; postal codes</div>
               </div>
             </div>
-            <div class="loc-pills" data-pills></div>
             <div class="loc-search-row">
-              <input type="search" class="loc-search" data-search placeholder="Search cantons & cities…" autocomplete="off" />
+              <div class="loc-search-inner">
+                <div class="loc-pills" data-pills></div>
+                <input type="search" class="loc-search" data-search placeholder="Search cantons, cities &amp; PLZ…" autocomplete="off" />
+              </div>
               <button type="button" class="loc-search-btn" data-toggle-dropdown aria-expanded="false" aria-label="Open list">⌕</button>
             </div>
             <div class="loc-dropdown" data-dropdown hidden>
@@ -1212,12 +1309,14 @@ INDEX_HTML = """
               <span class="loc-code-badge">DE</span>
               <div class="loc-panel-title-wrap">
                 <div class="loc-panel-title"><span class="loc-flag" aria-hidden="true">🇩🇪</span> Germany</div>
-                <div class="loc-sub">100 cities — tick to select</div>
+                <div class="loc-sub">Länder, cities &amp; postal codes</div>
               </div>
             </div>
-            <div class="loc-pills" data-pills></div>
             <div class="loc-search-row">
-              <input type="search" class="loc-search" data-search placeholder="Search Länder & cities…" autocomplete="off" />
+              <div class="loc-search-inner">
+                <div class="loc-pills" data-pills></div>
+                <input type="search" class="loc-search" data-search placeholder="Search Bundesländer, cities &amp; PLZ…" autocomplete="off" />
+              </div>
               <button type="button" class="loc-search-btn" data-toggle-dropdown aria-expanded="false" aria-label="Open list">⌕</button>
             </div>
             <div class="loc-dropdown" data-dropdown hidden>
@@ -1228,7 +1327,7 @@ INDEX_HTML = """
           </div>
           <label class="loc-custom-check"><input type="checkbox" id="custom-locations" /> Custom locations</label>
           <textarea id="custom-cities" class="loc-custom-ta" rows="3" placeholder="One city per line or comma-separated (any country)" style="display:none"></textarea>
-          <p class="hint loc-hint">Each country: open the list (⌕), tick cities (or “Select all”) — 100 per country. Custom locations adds names not in the lists.</p>
+          <p class="hint loc-hint">Open the list (⌕), expand states and cities, then tick Bundesländer/cantons, whole cities, or individual postal codes. Custom locations adds free-text areas not in the tree.</p>
         </div>
         <hr class="divider">
         <div class="field-group niche-section">
@@ -1317,10 +1416,28 @@ INDEX_HTML = """
           if (window.__pickers && window.__pickers.de) window.__pickers.de.setDisabled(on);
         });
       }
+      var countrySel = document.getElementById('loc-country');
+      function applyCountryPanel(code) {
+        var ch = document.getElementById('loc-ch');
+        var de = document.getElementById('loc-de');
+        if (ch) ch.hidden = code !== 'CH';
+        if (de) de.hidden = code !== 'DE';
+      }
+      if (countrySel) {
+        countrySel.addEventListener('change', function () {
+          applyCountryPanel(countrySel.value);
+        });
+        applyCountryPanel(countrySel.value);
+      }
       document.querySelectorAll('[data-focus-country]').forEach(function (a) {
         a.addEventListener('click', function (e) {
           e.preventDefault();
-          var id = a.getAttribute('data-focus-country') === 'CH' ? 'loc-ch' : 'loc-de';
+          var code = a.getAttribute('data-focus-country');
+          if (countrySel && (code === 'CH' || code === 'DE')) {
+            countrySel.value = code;
+            applyCountryPanel(code);
+          }
+          var id = code === 'CH' ? 'loc-ch' : 'loc-de';
           var node = document.getElementById(id);
           if (node) node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
