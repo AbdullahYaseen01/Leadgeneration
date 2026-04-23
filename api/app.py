@@ -173,6 +173,71 @@ VERCEL_MAX_TIME_SECONDS = 290
 VERCEL = os.environ.get("VERCEL") == "1"
 
 
+GERMAN_NICHE_REPLACEMENTS: list[tuple[str, str]] = [
+    ("Physical therapists", "Physiotherapeuten"),
+    ("Dentists", "Zahnaerzte"),
+    ("Auto repair shops", "Autowerkstaetten"),
+    ("Moving companies", "Umzugsunternehmen"),
+    ("Cleaning companies", "Reinigungsunternehmen"),
+    ("Real estate agents", "Immobilienmakler"),
+    ("Lawyers / tax advisors", "Anwaelte / Steuerberater"),
+    ("Pet services", "Dienstleistungen fuer Haustiere"),
+    ("Plumbing & heating", "Sanitaer & Heizung"),
+    ("Gardening & landscaping", "Garten- und Landschaftsbau"),
+    ("Hair salons", "Friseursalons"),
+    ("Gyms / fitness", "Fitnessstudios"),
+    ("Electricians", "Elektriker"),
+    ("Roofing", "Dachdecker"),
+    ("Locksmiths", "Schluesseldienste"),
+    ("Car wash", "Autowaeschen"),
+    ("Florists", "Blumenlaeden"),
+    ("Bakeries", "Baeckereien"),
+    ("Pharmacies", "Apotheken"),
+    ("Optometrists", "Optiker"),
+    ("Insurance agents", "Versicherungsberater"),
+    ("Accountants", "Steuerberater"),
+    ("Photographers", "Fotografen"),
+    ("Dry cleaning", "Textilreinigung"),
+    ("IT support", "IT-Support"),
+    ("Marketing agencies", "Marketingagenturen"),
+    ("Web design agencies", "Webdesign-Agenturen"),
+    ("Software development companies", "Softwareentwicklungsunternehmen"),
+    ("Managed IT services", "Managed IT Services"),
+    ("Cybersecurity services", "Cybersicherheitsdienste"),
+    ("Business consultants", "Unternehmensberater"),
+]
+
+GENERIC_GERMAN_NICHE_REPLACEMENTS: list[tuple[str, str]] = [
+    ("companies", "Unternehmen"),
+    ("services", "Dienstleistungen"),
+    ("service", "Dienstleistung"),
+    ("agencies", "Agenturen"),
+    ("agency", "Agentur"),
+    ("shops", "Geschaefte"),
+    ("shop", "Geschaeft"),
+    ("stores", "Laeden"),
+    ("store", "Laden"),
+    ("clinics", "Kliniken"),
+    ("clinic", "Klinik"),
+    ("centers", "Zentren"),
+    ("center", "Zentrum"),
+    ("schools", "Schulen"),
+    ("school", "Schule"),
+    ("consultants", "Berater"),
+    ("consultant", "Berater"),
+]
+
+
+def _niche_label_de(niche_name: str) -> str:
+    for source, target in GERMAN_NICHE_REPLACEMENTS:
+        if niche_name == source:
+            return target
+    label = niche_name
+    for source, target in GENERIC_GERMAN_NICHE_REPLACEMENTS:
+        label = re.sub(rf"\b{re.escape(source)}\b", target, label, flags=re.IGNORECASE)
+    return label
+
+
 def _run_job(
     job_id: str,
     cities: list[str],
@@ -207,10 +272,11 @@ def _run_job(
 @app.route("/")
 def index():
     max_leads = MAX_LEADS_VERCEL if VERCEL else MAX_LEADS_WEB
+    niche_options = [{"value": n, "label": _niche_label_de(n)} for n in NICHES]
     return render_template_string(
         INDEX_HTML,
         location_tree=LOCATION_TREE,
-        niches=NICHES,
+        niche_options=niche_options,
         max_leads_web=max_leads,
         is_vercel=VERCEL,
     )
@@ -1333,8 +1399,8 @@ INDEX_HTML = """
         <div class="field-group niche-section">
           <label class="section-label" for="niche">Niches</label>
           <select id="niche" name="niche" multiple size="8">
-            {% for n in niches %}
-            <option value="{{ n | e }}">{{ n | e }}</option>
+            {% for n in niche_options %}
+            <option value="{{ n.value | e }}">{{ n.label | e }}</option>
             {% endfor %}
           </select>
           <div class="quick-actions">
