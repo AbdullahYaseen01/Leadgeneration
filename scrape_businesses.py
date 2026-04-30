@@ -774,7 +774,17 @@ COLUMNS = [
     "website_url",
     "emails_found",
     "ReviewsCount",
+    "competitor1",
+    "competitor2",
+    "positive_observation",
 ]
+
+DEFAULT_COMPETITOR_1 = "PHYSIOteam Mannheim"
+DEFAULT_COMPETITOR_2 = "Physio am Turm"
+DEFAULT_POSITIVE_OBSERVATION = (
+    "Ihre Klinik bietet hochwertige, patientenorientierte Versorgung durch "
+    "fachkundige Rehabilitationstechniken an einem gut erreichbaren Standort."
+)
 
 if os.environ.get("VERCEL"):
     OUTPUT_DIR = Path("/tmp")
@@ -1121,7 +1131,16 @@ def export_csv(
     for lead in rows:
         for col in COLUMNS:
             if col not in lead:
-                lead[col] = 0 if col == "ReviewsCount" else ""
+                if col == "ReviewsCount":
+                    lead[col] = 0
+                elif col == "competitor1":
+                    lead[col] = DEFAULT_COMPETITOR_1
+                elif col == "competitor2":
+                    lead[col] = DEFAULT_COMPETITOR_2
+                elif col == "positive_observation":
+                    lead[col] = DEFAULT_POSITIVE_OBSERVATION
+                else:
+                    lead[col] = ""
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS, extrasaction="ignore")
         writer.writeheader()
@@ -1227,6 +1246,9 @@ def _fetch_details_task(
         "website_url": website,
         "emails_found": "Nill",
         "ReviewsCount": reviews_count,
+        "competitor1": DEFAULT_COMPETITOR_1,
+        "competitor2": DEFAULT_COMPETITOR_2,
+        "positive_observation": DEFAULT_POSITIVE_OBSERVATION,
     }
     return (lead, website)
 
