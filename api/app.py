@@ -161,6 +161,9 @@ LEADS_FORM_JS = r"""
 from location_data import LOCATION_TREE
 from scrape_businesses import (
     COLUMNS,
+    DEFAULT_COMPETITOR_1,
+    DEFAULT_COMPETITOR_2,
+    DEFAULT_POSITIVE_OBSERVATION,
     NICHES,
     run_collection_for_cities_niches,
 )
@@ -171,6 +174,22 @@ MAX_LEADS_WEB = 1000
 MAX_LEADS_VERCEL = 1000
 VERCEL_MAX_TIME_SECONDS = 290
 VERCEL = os.environ.get("VERCEL") == "1"
+CSV_EXTRA_COLUMNS = ["competitor1", "competitor2", "positive_observation"]
+CSV_EXPORT_COLUMNS = COLUMNS + [c for c in CSV_EXTRA_COLUMNS if c not in COLUMNS]
+
+
+def _normalize_leads_for_csv(leads: list[dict]) -> list[dict]:
+    normalized: list[dict] = []
+    for lead in leads:
+        row = dict(lead or {})
+        if not str(row.get("competitor1", "")).strip():
+            row["competitor1"] = DEFAULT_COMPETITOR_1
+        if not str(row.get("competitor2", "")).strip():
+            row["competitor2"] = DEFAULT_COMPETITOR_2
+        if not str(row.get("positive_observation", "")).strip():
+            row["positive_observation"] = DEFAULT_POSITIVE_OBSERVATION
+        normalized.append(row)
+    return normalized
 
 
 def _run_job(
@@ -301,9 +320,9 @@ def api_collect():
             logging.exception("Collect failed")
             return jsonify({"error": str(e)}), 500
         buf = io.StringIO()
-        writer = csv_module.DictWriter(buf, fieldnames=COLUMNS, extrasaction="ignore")
+        writer = csv_module.DictWriter(buf, fieldnames=CSV_EXPORT_COLUMNS, extrasaction="ignore")
         writer.writeheader()
-        writer.writerows(leads)
+        writer.writerows(_normalize_leads_for_csv(leads))
         csv_body = buf.getvalue()
         return Response(
             csv_body.encode("utf-8"),
@@ -341,9 +360,9 @@ def api_download(job_id):
     if j["status"] != "done":
         return jsonify({"error": "Job not ready for download"}), 400
     buf = io.StringIO()
-    writer = csv_module.DictWriter(buf, fieldnames=COLUMNS, extrasaction="ignore")
+    writer = csv_module.DictWriter(buf, fieldnames=CSV_EXPORT_COLUMNS, extrasaction="ignore")
     writer.writeheader()
-    writer.writerows(j["leads"])
+    writer.writerows(_normalize_leads_for_csv(j["leads"]))
     buf.seek(0)
     filename = f"leads_{job_id[:8]}.csv"
     return send_file(
